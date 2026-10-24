@@ -1,0 +1,46 @@
+{
+  "scenario_id": "scenario_1_electronics_q3",
+  "title": "Electronics Q3 Profit Margin Collapse Investigation",
+  "query": "Why did net profit margin for Electronics drop 18.5% in Q3?",
+  "category": "Electronics",
+  "timeframe": "2026-Q3",
+  "reported_margin_drop_pct": 18.5,
+  "queries": {
+    "H1": {
+      "hypothesis": "H1: Product defect returns drove the sudden margin drop",
+      "target_tables": ["TPCDS_DB.web_returns", "TPCDS_DB.customer_address"],
+      "sql": "SELECT ca_state, COUNT(*) AS return_cnt, SUM(wr_return_amt) AS total_return_amt, AVG(wr_return_amt) AS avg_return_amt FROM TPCDS_DB.web_returns JOIN TPCDS_DB.customer_address ON wr_returning_addr_sk = ca_address_sk WHERE wr_returned_date_sk BETWEEN 2459800 AND 2459892 GROUP BY ca_state ORDER BY total_return_amt DESC LIMIT 10;",
+      "rows": [
+        {"ca_state": "NY", "return_cnt": "142", "total_return_amt": "28400.50", "avg_return_amt": "200.00"},
+        {"ca_state": "CA", "return_cnt": "138", "total_return_amt": "27600.00", "avg_return_amt": "200.00"},
+        {"ca_state": "TX", "return_cnt": "95", "total_return_amt": "19000.25", "avg_return_amt": "200.00"},
+        {"ca_state": "FL", "return_cnt": "82", "total_return_amt": "16400.00", "avg_return_amt": "200.00"},
+        {"ca_state": "IL", "return_cnt": "60", "total_return_amt": "12000.00", "avg_return_amt": "200.00"}
+      ],
+      "critic_verdict": {
+        "confidence_score": 0.42,
+        "status": "BRANCH_RETRY",
+        "event": "CLAIM_BLOCKED",
+        "reasoning": "National return rate in TPCDS_DB.web_returns increased by only 1.2% year-over-year ($103,400 total return volume), which mathematically accounts for less than 1.1% of the observed $1.85M (18.5%) margin contraction. Rejecting H1 as primary root cause. Force branching to investigate cross-silo inventory stockouts and delivery logistics."
+      }
+    },
+    "H2_H3_COMBINED": {
+      "hypothesis": "H2_H3_COMBINED: Northeast DC component stockouts combined with 34% urban transit delays forced emergency split-shipments and high-value order cancellations",
+      "target_tables": ["TPCDS_DB.inventory", "TPCDS_DB.web_sales", "NY_TAXI.trip_data", "NY_TAXI.taxi_zones"],
+      "sql": "SELECT i.inv_warehouse_sk, w.ws_item_sk, AVG(i.inv_quantity_on_hand) AS avg_stock, SUM(w.ws_ext_sales_price) AS sales_volume, AVG(t.trip_distance) AS avg_trip_dist, AVG(t.fare_amount) AS expedited_freight_surcharge, AVG(t.trip_duration_min) AS avg_transit_min FROM TPCDS_DB.inventory i JOIN TPCDS_DB.web_sales w ON i.inv_item_sk = w.ws_item_sk JOIN NY_TAXI.trip_data t ON w.ws_order_number = t.vendor_id JOIN NY_TAXI.taxi_zones z ON t.pulocationid = z.locationid WHERE i.inv_warehouse_sk = 1 GROUP BY i.inv_warehouse_sk, w.ws_item_sk LIMIT 5;",
+      "rows": [
+        {"inv_warehouse_sk": "1", "ws_item_sk": "1001", "avg_stock": "120.00", "sales_volume": "485000.00", "avg_trip_dist": "14.2", "expedited_freight_surcharge": "38.20", "avg_transit_min": "48.5"},
+        {"inv_warehouse_sk": "1", "ws_item_sk": "1002", "avg_stock": "85.00", "sales_volume": "392000.00", "avg_trip_dist": "15.8", "expedited_freight_surcharge": "41.50", "avg_transit_min": "52.0"},
+        {"inv_warehouse_sk": "1", "ws_item_sk": "1003", "avg_stock": "94.00", "sales_volume": "341000.00", "avg_trip_dist": "13.9", "expedited_freight_surcharge": "36.80", "avg_transit_min": "46.2"},
+        {"inv_warehouse_sk": "1", "ws_item_sk": "1004", "avg_stock": "110.00", "sales_volume": "310000.00", "avg_trip_dist": "16.1", "expedited_freight_surcharge": "42.10", "avg_transit_min": "53.4"},
+        {"inv_warehouse_sk": "1", "ws_item_sk": "1005", "avg_stock": "64.00", "sales_volume": "285000.00", "avg_trip_dist": "14.7", "expedited_freight_surcharge": "39.00", "avg_transit_min": "49.1"}
+      ],
+      "critic_verdict": {
+        "confidence_score": 0.91,
+        "status": "VERIFIED",
+        "event": "APPROVED_CLAIM",
+        "reasoning": "Cross-silo evidence confirms Northeast Distribution Center (warehouse_sk=1) inventory collapsed by 84% (down to 64-120 units vs baseline of 1,500 units). Urban delivery congestion documented in NY_TAXI (trip duration up 34% to 49.8 mins) triggered 2,410 customer order cancellations and forced $39.50/unit expedited freight courier surcharges. Combined financial impact explains 17.8% of the 18.5% net margin drop."
+      }
+    }
+  }
+}

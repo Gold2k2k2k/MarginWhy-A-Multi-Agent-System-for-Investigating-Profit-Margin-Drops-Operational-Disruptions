@@ -1,0 +1,41 @@
+{
+  "scenario_id": "scenario_2_apparel_returns",
+  "title": "Fall-Winter Apparel Net Revenue Decline Investigation",
+  "query": "Why did Fall-Winter apparel net revenue decline by 14.2% across catalog channels?",
+  "category": "Apparel",
+  "timeframe": "2026-Q4",
+  "reported_margin_drop_pct": 14.2,
+  "queries": {
+    "H1": {
+      "hypothesis": "H1: Macroeconomic consumer demand slump reduced overall purchase volume",
+      "target_tables": ["TPCDS_DB.catalog_sales", "TPCDS_DB.item"],
+      "sql": "SELECT i.i_category, COUNT(cs.cs_order_number) AS total_orders, SUM(cs.cs_sales_price) AS gross_sales FROM TPCDS_DB.catalog_sales cs JOIN TPCDS_DB.item i ON cs.cs_item_sk = i.i_item_sk WHERE i.i_category = 'Apparel' GROUP BY i.i_category LIMIT 10;",
+      "rows": [
+        {"i_category": "Apparel", "total_orders": "48200", "gross_sales": "3856000.00"}
+      ],
+      "critic_verdict": {
+        "confidence_score": 0.38,
+        "status": "BRANCH_RETRY",
+        "event": "CLAIM_BLOCKED",
+        "reasoning": "Gross catalog order volume (48,200 orders) and initial checkout conversions remained robust (+1.4% year-over-year). The revenue slump occurred post-purchase rather than top-of-funnel demand softening. Rejecting macroeconomic slump. Force branching to investigate return reasons by supplier."
+      }
+    },
+    "H2_VENDOR_SIZING": {
+      "hypothesis": "H2_VENDOR_SIZING: Vendor SKU sizing mismatch on overseas outerwear line caused 48% sizing-mismatch return rate in catalog returns",
+      "target_tables": ["TPCDS_DB.catalog_returns", "TPCDS_DB.item", "TPCDS_DB.reason"],
+      "sql": "SELECT i.i_manufact_id, r.r_reason_desc, COUNT(cr.cr_item_sk) AS return_count, SUM(cr.cr_return_amt) AS refunded_amt FROM TPCDS_DB.catalog_returns cr JOIN TPCDS_DB.item i ON cr.cr_item_sk = i.i_item_sk JOIN TPCDS_DB.reason r ON cr.cr_reason_sk = r.r_reason_sk WHERE i.i_category = 'Apparel' GROUP BY i.i_manufact_id, r.r_reason_desc ORDER BY return_count DESC LIMIT 5;",
+      "rows": [
+        {"i_manufact_id": "VN-702", "r_reason_desc": "Wrong size or fit", "return_count": "11240", "refunded_amt": "899200.00"},
+        {"i_manufact_id": "VN-702", "r_reason_desc": "Not as pictured", "return_count": "1420", "refunded_amt": "113600.00"},
+        {"i_manufact_id": "DOM-104", "r_reason_desc": "Wrong size or fit", "return_count": "980", "refunded_amt": "68600.00"},
+        {"i_manufact_id": "DOM-108", "r_reason_desc": "Defective item", "return_count": "410", "refunded_amt": "28700.00"}
+      ],
+      "critic_verdict": {
+        "confidence_score": 0.93,
+        "status": "VERIFIED",
+        "event": "APPROVED_CLAIM",
+        "reasoning": "Data proves supplier VN-702 (contracted in August 2026 for outer garments) had a 48.2% return rate almost entirely driven by 'Wrong size or fit' (11,240 returns, $899,200 refunded). Sizing chart translation error caused women's EU/US conversion skew. This single supplier defect explains 13.6% of the 14.2% revenue decline."
+      }
+    }
+  }
+}

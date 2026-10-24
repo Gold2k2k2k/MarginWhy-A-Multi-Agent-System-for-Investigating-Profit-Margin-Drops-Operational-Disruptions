@@ -1,0 +1,38 @@
+{
+  "project_name": "MarginWhy",
+  "tagline": "Multi-Agent Root-Cause Investigation for Retail Profit Drops & Operational Disruptions",
+  "hackathon": "Open Agent Hackathon 2026",
+  "event_url": "https://hackathon.genai.works/event/open-agent-hackathon-2026",
+  "primary_track": "Track 02: The Agent That Can Explain Why",
+  "target_awards": [
+    "Track 02: The Agent That Can Explain Why ($1,600 First Prize)",
+    "In-Kind Sponsor Prize: Best Use of NVIDIA Nemotron (NVIDIA DGX Spark Founder's Edition, $4,699)",
+    "Developer Tool Prize: Cursor Developer Award ($2,301 Cursor API Credits)"
+  ],
+  "team": {
+    "name": "Light of Numbers",
+    "members": [
+      {
+        "role": "Lead Architect & AI Systems Engineer",
+        "contribution": "Multi-agent critic loop, Zetaris Lightning SQL adapter, Meterless H-MEM engine"
+      }
+    ]
+  },
+  "tech_stack": {
+    "llm_model": "nvidia/nemotron-3-super-120b-a12b",
+    "inference_engine": "Meterless Nightshift (OpenAI SDK protocol compatible)",
+    "data_harness": "Zetaris AI Data Harness & Lightning SQL",
+    "memory_engine": "Meterless H-MEM (3-Tier Hierarchical Memory & Markovian Bounded Carryover)",
+    "framework": "FastAPI + Vanilla CSS/JS Executive UI Dashboard",
+    "testing": "Pytest H-MEM Conformance Test Suite"
+  },
+  "cursor_developer_story": {
+    "tool": "Cursor IDE (Composer, Agent & Context Engineering)",
+    "description": "MarginWhy was architected and developed using Cursor's agentic workflows. Cursor Composer was utilized to synthesize sponsor constraints (Zetaris Lightning SQL schema inspection, Meterless H-MEM 8-field record contract, NVIDIA Nemotron inference contracts) into a cohesive non-linear multi-agent adversarial loop. Automated test fixtures and resilient fallbacks were generated using Cursor rules (.cursor/rules/) and contextual prompt engineering."
+  },
+  "execution": {
+    "cli_command": "python run.py --query \"Why did net profit margin for Electronics drop 18.5% in Q3?\" --sample-mode",
+    "dashboard_command": "uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload",
+    "test_command": "pytest tests/test_hmem_conformance.py -v"
+  }
+}

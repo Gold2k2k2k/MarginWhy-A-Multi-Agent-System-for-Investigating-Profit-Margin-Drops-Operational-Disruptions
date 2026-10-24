@@ -1,0 +1,42 @@
+{
+  "scenario_id": "scenario_3_shipping_delay",
+  "title": "Suburban Retail Freight Cost Overrun Investigation",
+  "query": "Why did suburban retail logistics freight costs exceed budget by 22%?",
+  "category": "Logistics & Supply Chain",
+  "timeframe": "2026-Q3",
+  "reported_margin_drop_pct": 22.0,
+  "queries": {
+    "H1": {
+      "hypothesis": "H1: Line-haul carrier base diesel fuel price surge across regional interstate lanes",
+      "target_tables": ["TPCDS_DB.ship_mode"],
+      "sql": "SELECT sm_type, sm_carrier, AVG(sm_contract) AS avg_contract_rate FROM TPCDS_DB.ship_mode GROUP BY sm_type, sm_carrier LIMIT 10;",
+      "rows": [
+        {"sm_type": "REGULAR", "sm_carrier": "FEDEX_GROUND", "avg_contract_rate": "14.50"},
+        {"sm_type": "REGULAR", "sm_carrier": "UPS_STANDARD", "avg_contract_rate": "14.20"},
+        {"sm_type": "REGULAR", "sm_carrier": "USPS_PARCEL", "avg_contract_rate": "11.80"}
+      ],
+      "critic_verdict": {
+        "confidence_score": 0.35,
+        "status": "BRANCH_RETRY",
+        "event": "CLAIM_BLOCKED",
+        "reasoning": "Contracted long-haul freight rates across line-haul carriers rose by only 0.8%, which does not account for a 22.0% budget overrun. Rejecting macro fuel cost hypothesis. Force branching to analyze regional dispatch frequency and urban toll/congestion zones."
+      }
+    },
+    "H2_SPLIT_DISPATCH": {
+      "hypothesis": "H2_SPLIT_DISPATCH: Inefficient order split-shipment dispatch during peak toll hours from central depot to suburban clusters triggered congestion surge surcharges",
+      "target_tables": ["TPCDS_DB.inventory", "NY_TAXI.trip_data", "NY_TAXI.taxi_zones"],
+      "sql": "SELECT z.zone, COUNT(t.vendor_id) AS dispatch_count, AVG(t.tolls_amount) AS avg_toll, AVG(t.congestion_surcharge) AS avg_congestion, AVG(t.fare_amount) AS total_trip_cost FROM NY_TAXI.trip_data t JOIN NY_TAXI.taxi_zones z ON t.dolocationid = z.locationid WHERE t.congestion_surcharge > 0 GROUP BY z.zone ORDER BY dispatch_count DESC LIMIT 5;",
+      "rows": [
+        {"zone": "Westchester Suburban Hub", "dispatch_count": "1840", "avg_toll": "16.50", "avg_congestion": "2.75", "total_trip_cost": "64.20"},
+        {"zone": "Long Island East Cluster", "dispatch_count": "1620", "avg_toll": "18.20", "avg_congestion": "2.75", "total_trip_cost": "71.50"},
+        {"zone": "North Bergen Distribution", "dispatch_count": "1410", "avg_toll": "14.00", "avg_congestion": "2.75", "total_trip_cost": "58.90"}
+      ],
+      "critic_verdict": {
+        "confidence_score": 0.89,
+        "status": "VERIFIED",
+        "event": "APPROVED_CLAIM",
+        "reasoning": "Correlating inventory dispatch logs with NY_TAXI toll and congestion metrics proves a 62% increase in low-density split dispatches (<3 items per van) during 07:00-10:00 peak toll hours. Bridge and congestion surcharges averaged $19.25 per trip across 4,870 suburban store dispatches, explaining 20.4% of the 22% freight budget overrun."
+      }
+    }
+  }
+}
