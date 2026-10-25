@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from pydantic import BaseModel
 
 from .agents.orchestrator import MarginWhyOrchestrator
@@ -68,16 +68,23 @@ def get_trace_log(limit: int = 50) -> List[Dict[str, Any]]:
     if limit <= 0:
         return []
     log_file = Path(__file__).resolve().parent.parent / "logs" / "trace.jsonl"
-    if not log_file.exists():
-        return []
+    tmp_file = Path("/tmp") / "logs" / "trace.jsonl"
+    target_file = tmp_file if tmp_file.exists() else log_file
+    if not target_file.exists():
+        return orchestrator.trace_events[-limit:]
     events = []
-    with open(log_file, "r", encoding="utf-8") as f:
-        for line in f:
-            if line.strip():
-                try:
-                    events.append(json.loads(line))
-                except Exception:
-                    continue
+    try:
+        with open(target_file, "r", encoding="utf-8") as f:
+            for line in f:
+                if line.strip():
+                    try:
+                        events.append(json.loads(line))
+                    except Exception:
+                        continue
+    except Exception:
+        return orchestrator.trace_events[-limit:]
+    if not events and orchestrator.trace_events:
+        return orchestrator.trace_events[-limit:]
     return events[-limit:]
 
 
@@ -175,6 +182,32 @@ def run_investigation(req: RunRequest) -> Dict[str, Any]:
     }
 
 
+FAVICON_SVG = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <defs>
+    <linearGradient id="bgG" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#020617"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+    <linearGradient id="lineG" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#6366f1"/>
+      <stop offset="100%" stop-color="#38bdf8"/>
+    </linearGradient>
+  </defs>
+  <rect width="32" height="32" rx="7" fill="url(#bgG)" stroke="rgba(255,255,255,0.12)" stroke-width="1"/>
+  <path d="M6 22 L13 14 L18 19 L26 8" stroke="url(#lineG)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <circle cx="18" cy="19" r="2.2" fill="#ef4444"/>
+  <circle cx="13" cy="14" r="2.2" fill="#10b981"/>
+  <circle cx="26" cy="8" r="3" fill="#38bdf8"/>
+  <circle cx="26" cy="8" r="5" stroke="#38bdf8" stroke-width="0.8" fill="none" opacity="0.4"/>
+</svg>"""
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+@app.get("/favicon.svg", include_in_schema=False)
+def favicon_ico() -> Response:
+    return Response(content=FAVICON_SVG, media_type="image/svg+xml")
+
+
 @app.get("/", response_class=HTMLResponse)
 def index() -> str:
     """Delivers the Executive Multi-Agent Root-Cause Diagnostic Dashboard."""
@@ -183,8 +216,9 @@ def index() -> str:
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MarginWhy — Executive Multi-Agent Root-Cause Dashboard</title>
-  <meta name="description" content="Non-linear multi-agent adversarial critic system for root-cause profit margin drop investigation.">
+  <title>MarginWhy</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='bgG' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%23020617'/%3E%3Cstop offset='100%25' stop-color='%230f172a'/%3E%3C/linearGradient%3E%3ClinearGradient id='lineG' x1='0%25' y1='100%25' x2='100%25' y2='0%25'%3E%3Cstop offset='0%25' stop-color='%236366f1'/%3E%3Cstop offset='100%25' stop-color='%2338bdf8'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='7' fill='url(%23bgG)' stroke='rgba(255,255,255,0.12)' stroke-width='1'/%3E%3Cpath d='M6 22 L13 14 L18 19 L26 8' stroke='url(%23lineG)' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3Ccircle cx='18' cy='19' r='2.2' fill='%23ef4444'/%3E%3Ccircle cx='13' cy='14' r='2.2' fill='%2310b981'/%3E%3Ccircle cx='26' cy='8' r='3' fill='%2338bdf8'/%3E%3Ccircle cx='26' cy='8' r='5' stroke='%2338bdf8' stroke-width='0.8' fill='none' opacity='0.4'/%3E%3C/svg%3E">
+  <meta name="description" content="MarginWhy - Non-linear multi-agent adversarial critic system for root-cause profit margin drop investigation.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">

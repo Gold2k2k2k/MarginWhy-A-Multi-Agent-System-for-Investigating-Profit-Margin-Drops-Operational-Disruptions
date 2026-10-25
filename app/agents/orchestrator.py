@@ -47,9 +47,16 @@ class MarginWhyOrchestrator:
             self.trace_file = Path(trace_log_path)
         else:
             base_dir = Path(__file__).resolve().parent.parent.parent
-            self.trace_file = base_dir / "logs" / "trace.jsonl"
+            if os.environ.get("VERCEL"):
+                self.trace_file = Path("/tmp") / "logs" / "trace.jsonl"
+            else:
+                self.trace_file = base_dir / "logs" / "trace.jsonl"
             
-        self.trace_file.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            self.trace_file.parent.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            self.trace_file = Path("/tmp") / "logs" / "trace.jsonl"
+            self.trace_file.parent.mkdir(parents=True, exist_ok=True)
         self.trace_events: List[Dict[str, Any]] = []
 
     def _log_event(self, event_data: Dict[str, Any]) -> None:
@@ -64,9 +71,12 @@ class MarginWhyOrchestrator:
             self.trace_events.append(event_record)
 
             # Append to JSONL file
-            with open(self.trace_file, "a", encoding="utf-8") as f:
-                f.write(line)
-                f.flush()
+            try:
+                with open(self.trace_file, "a", encoding="utf-8") as f:
+                    f.write(line)
+                    f.flush()
+            except OSError:
+                pass
 
             # Pretty print to stdout for interactive viewing
             agent_name = event_record.get("agent", "System")
