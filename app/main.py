@@ -20,7 +20,7 @@ orchestrator = MarginWhyOrchestrator(sample_mode=True)
 
 class RunRequest(BaseModel):
     query: Optional[str] = None
-    scenario_file: Optional[str] = "scenario_1_electronics_q3.json"
+    scenario_file: Optional[str] = None
     sample_mode: Optional[bool] = True
 
 
@@ -29,6 +29,8 @@ def health_check() -> Dict[str, Any]:
     return {
         "status": "HEALTHY",
         "system": "MarginWhy",
+        "version": "1.0.0",
+        "hmem_status": "READY",
         "track": "Track 02: The Agent That Can Explain Why",
         "model": os.getenv("NVIDIA_MODEL_NAME", "nvidia/nemotron-3-super-120b-a12b"),
         "sample_mode": os.getenv("SAMPLE_MODE", "true").lower() == "true",
@@ -47,8 +49,11 @@ def list_scenarios() -> List[Dict[str, Any]]:
                 with open(f, "r", encoding="utf-8") as fp:
                     data = json.load(fp)
                     scenarios.append({
+                        "id": data.get("scenario_id", f.stem),
+                        "file": f.name,
                         "filename": f.name,
                         "title": data.get("title", f.stem),
+                        "description": data.get("query", ""),
                         "query": data.get("query", ""),
                         "category": data.get("category", "General"),
                         "margin_drop_pct": data.get("reported_margin_drop_pct", 0.0)
@@ -60,6 +65,8 @@ def list_scenarios() -> List[Dict[str, Any]]:
 
 @app.get("/api/trace")
 def get_trace_log(limit: int = 50) -> List[Dict[str, Any]]:
+    if limit <= 0:
+        return []
     log_file = Path(__file__).resolve().parent.parent / "logs" / "trace.jsonl"
     if not log_file.exists():
         return []
@@ -87,8 +94,36 @@ def get_hmem_state() -> Dict[str, Any]:
 
 @app.post("/run")
 def run_investigation(req: RunRequest) -> Dict[str, Any]:
-    scenario = req.scenario_file or "scenario_1_electronics_q3.json"
+    scenario = req.scenario_file
     query = req.query
+
+    # Validate scenario_file against directory traversal
+    if scenario:
+        if ".." in scenario or "/" in scenario or "\\" in scenario:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid scenario_file '{scenario}': path traversal is not permitted."
+            )
+
+    # If scenario not specified, infer from query keywords if query is present
+    if not scenario and query:
+        q_lower = query.lower()
+        if "apparel" in q_lower:
+            scenario = "scenario_2_apparel_returns.json"
+        elif "shipping" in q_lower or "freight" in q_lower or "logistics" in q_lower:
+            scenario = "scenario_3_shipping_delay.json"
+        else:
+            scenario = "scenario_1_electronics_q3.json"
+    elif not scenario:
+        scenario = "scenario_1_electronics_q3.json"
+
+    # Configure sample mode if provided
+    if req.sample_mode is not None:
+        orchestrator.sample_mode = req.sample_mode
+        if req.sample_mode:
+            os.environ["SAMPLE_MODE"] = "true"
+        else:
+            os.environ["SAMPLE_MODE"] = "false"
 
     # Load query from scenario if query not explicitly provided
     if not query:
@@ -105,8 +140,10 @@ def run_investigation(req: RunRequest) -> Dict[str, Any]:
         "status": "SUCCESS",
         "query": res["query"],
         "scenario_file": res["scenario_file"],
+        "turns": res["turns_executed"],
         "turns_executed": res["turns_executed"],
         "approved_claims": res["approved_claims"],
+        "report": res["report_markdown"],
         "report_markdown": res["report_markdown"],
         "hmem_state": res["hmem_state"],
         "trust_ledger": res["trust_ledger"],

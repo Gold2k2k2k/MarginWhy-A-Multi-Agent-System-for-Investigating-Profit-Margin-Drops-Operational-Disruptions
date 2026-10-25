@@ -52,13 +52,22 @@ class ZetarisAdapter:
     def _resolve_sample_path(self, scenario_file: str) -> Path:
         """Resolves sample path whether executed from repo root or subdirectories."""
         base_dir = Path(__file__).resolve().parent.parent.parent
-        target_path = base_dir / "data" / "samples" / scenario_file
+        samples_dir = (base_dir / "data" / "samples").resolve()
+        target_path = (samples_dir / scenario_file).resolve()
+        try:
+            target_path.relative_to(samples_dir)
+        except ValueError:
+            return samples_dir / "__invalid_traversal__"
         if target_path.exists():
             return target_path
         # Fallback to relative path if available
-        rel_path = Path("data") / "samples" / scenario_file
-        if rel_path.exists():
-            return rel_path
+        rel_path = (Path("data") / "samples" / scenario_file).resolve()
+        try:
+            rel_path.relative_to(samples_dir)
+            if rel_path.exists():
+                return rel_path
+        except ValueError:
+            pass
         return target_path
 
     def execute_sql(
@@ -145,8 +154,18 @@ class ZetarisAdapter:
                 "row_count": 0
             }
 
-        with open(sample_path, "r", encoding="utf-8") as f:
-            bundle = json.load(f)
+        try:
+            with open(sample_path, "r", encoding="utf-8") as f:
+                bundle = json.load(f)
+        except Exception as e:
+            return {
+                "status": "FALLBACK_EMPTY",
+                "fallback_reason": f"Sample file could not be read or parsed as JSON: {e}",
+                "source": f"LOCAL_SAMPLE:{scenario_file}",
+                "sql": sql,
+                "rows": [],
+                "row_count": 0
+            }
 
         queries_map = bundle.get("queries", {})
         

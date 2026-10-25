@@ -1,5 +1,6 @@
 import json
 import os
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -11,6 +12,8 @@ from .planner import HypothesisPlanner
 from .retriever import ZetarisRetriever
 from .critic import SkepticalCritic
 from .synthesizer import ActionReportWriter
+
+_TRACE_LOCK = threading.Lock()
 
 
 class MarginWhyOrchestrator:
@@ -55,24 +58,28 @@ class MarginWhyOrchestrator:
             "timestamp": datetime.now(timezone.utc).isoformat(),
             **event_data
         }
-        self.trace_events.append(event_record)
+        line = json.dumps(event_record, ensure_ascii=False) + "\n"
 
-        # Append to JSONL file
-        with open(self.trace_file, "a", encoding="utf-8") as f:
-            f.write(json.dumps(event_record, ensure_ascii=False) + "\n")
+        with _TRACE_LOCK:
+            self.trace_events.append(event_record)
 
-        # Pretty print to stdout for interactive viewing
-        agent_name = event_record.get("agent", "System")
-        event_name = event_record.get("event", "INFO")
-        status = event_record.get("status", "")
-        print(f"[{event_record['timestamp']}] [{agent_name}] {event_name} ({status})")
-        if "sql_query" in event_record:
-            print(f"   SQL: {event_record['sql_query']}")
-        if "reasoning" in event_record:
-            print(f"   Reasoning: {event_record['reasoning']}")
-        if "confidence_score" in event_record:
-            print(f"   Confidence Score: {event_record['confidence_score']}")
-        print()
+            # Append to JSONL file
+            with open(self.trace_file, "a", encoding="utf-8") as f:
+                f.write(line)
+                f.flush()
+
+            # Pretty print to stdout for interactive viewing
+            agent_name = event_record.get("agent", "System")
+            event_name = event_record.get("event", "INFO")
+            status = event_record.get("status", "")
+            print(f"[{event_record['timestamp']}] [{agent_name}] {event_name} ({status})")
+            if "sql_query" in event_record:
+                print(f"   SQL: {event_record['sql_query']}")
+            if "reasoning" in event_record:
+                print(f"   Reasoning: {event_record['reasoning']}")
+            if "confidence_score" in event_record:
+                print(f"   Confidence Score: {event_record['confidence_score']}")
+            print()
 
     def run_investigation(
         self,

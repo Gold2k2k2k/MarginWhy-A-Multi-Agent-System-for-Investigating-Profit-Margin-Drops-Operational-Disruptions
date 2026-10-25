@@ -47,3 +47,6 @@ htmlcov/
 # Logs (keep directory structure via .gitkeep if needed)
 logs/*.log
 # logs/trace.jsonl can be tracked or ignored as preferred
+
+# Internal agent coordination scratchpad
+.agents/

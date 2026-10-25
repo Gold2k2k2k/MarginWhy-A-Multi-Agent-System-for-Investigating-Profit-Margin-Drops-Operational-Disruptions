@@ -1,3 +1,4 @@
+import threading
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
@@ -32,21 +33,23 @@ class HMemEngine:
     def __init__(self) -> None:
         self.records: Dict[str, HMemRecord] = {}
         self.trust_ledger: List[Dict[str, Any]] = []
+        self._lock = threading.RLock()
 
     def mine(self, record: HMemRecord) -> HMemRecord:
         """Stores a new record across tiers and appends an immutable audit event."""
-        self.records[record.id] = record
-        self._audit(
-            action="MINE",
-            record_id=record.id,
-            details={
-                "tier": record.tier,
-                "confidence": record.confidence,
-                "status": record.status,
-                "source": record.source
-            }
-        )
-        return record
+        with self._lock:
+            self.records[record.id] = record
+            self._audit(
+                action="MINE",
+                record_id=record.id,
+                details={
+                    "tier": record.tier,
+                    "confidence": record.confidence,
+                    "status": record.status,
+                    "source": record.source
+                }
+            )
+            return record
 
     def reject_and_branch(
         self,
@@ -56,20 +59,21 @@ class HMemEngine:
         critic_confidence: float
     ) -> None:
         """Marks a hypothesis as REJECTED and records replacement lineage in trust ledger."""
-        if rejected_id in self.records:
-            rec = self.records[rejected_id]
-            rec.status = "REJECTED"
-            rec.confidence = critic_confidence
-            rec.replacement_lineage = {
-                "superseded_id": rejected_id,
-                "replaced_by": new_id,
-                "reason": reason
-            }
-            self._audit(
-                action="CLAIM_BLOCKED_LINEAGE",
-                record_id=rejected_id,
-                details=rec.replacement_lineage
-            )
+        with self._lock:
+            if rejected_id in self.records:
+                rec = self.records[rejected_id]
+                rec.status = "REJECTED"
+                rec.confidence = critic_confidence
+                rec.replacement_lineage = {
+                    "superseded_id": rejected_id,
+                    "replaced_by": new_id,
+                    "reason": reason
+                }
+                self._audit(
+                    action="CLAIM_BLOCKED_LINEAGE",
+                    record_id=rejected_id,
+                    details=rec.replacement_lineage
+                )
 
     def retrieve_hybrid(
         self,
@@ -78,8 +82,10 @@ class HMemEngine:
         include_rejected: bool = False
     ) -> List[HMemRecord]:
         """Weighted hybrid retrieval over confidence, entity overlap, and tier priority."""
+        with self._lock:
+            records_snapshot = list(self.records.values())
         scored_records: List[Tuple[float, HMemRecord]] = []
-        for rec in self.records.values():
+        for rec in records_snapshot:
             if not include_rejected and rec.status == "REJECTED":
                 continue
             if rec.confidence < min_confidence:
@@ -95,10 +101,16 @@ class HMemEngine:
 
     def get_rejected_hypotheses(self) -> List[str]:
         """Returns IDs of all previously refuted hypotheses."""
-        return [r.id for r in self.records.values() if r.status == "REJECTED"]
+        with self._lock:
+            return [r.id for r in list(self.records.values()) if r.status == "REJECTED"]
 
     def build_markovian_carryover(self) -> Dict[str, Any]:
         """Produces a bounded state summary so agents never reload bloated raw transcripts."""
+        with self._lock:
+            records_snapshot = list(self.records.values())
+            total_records = len(self.records)
+            ledger_mutations = len(self.trust_ledger)
+
         return {
             "rejected_hypotheses": [
                 {
@@ -106,7 +118,7 @@ class HMemEngine:
                     "reason": (r.replacement_lineage or {}).get("reason", ""),
                     "confidence": r.confidence
                 }
-                for r in self.records.values()
+                for r in records_snapshot
                 if r.status == "REJECTED"
             ],
             "approved_claims": [
@@ -116,7 +128,7 @@ class HMemEngine:
                     "confidence": r.confidence,
                     "provenance": r.provenance
                 }
-                for r in self.records.values()
+                for r in records_snapshot
                 if r.status in ("ACTIVE", "CONSOLIDATED") and r.confidence >= 0.70
             ],
             "active_hypotheses": [
@@ -125,29 +137,31 @@ class HMemEngine:
                     "content": r.content,
                     "confidence": r.confidence
                 }
-                for r in self.records.values()
+                for r in records_snapshot
                 if r.tier == "working" and r.status == "ACTIVE"
             ],
-            "total_records": len(self.records),
-            "ledger_mutations": len(self.trust_ledger)
+            "total_records": total_records,
+            "ledger_mutations": ledger_mutations
         }
 
     def consolidate_sleep_cycle(self) -> int:
         """Promotes verified working memories (confidence >= 0.70) into the long_term tier."""
-        promoted = 0
-        for rec in self.records.values():
-            if rec.tier == "working" and rec.status == "ACTIVE" and rec.confidence >= 0.70:
-                rec.tier = "long_term"
-                rec.status = "CONSOLIDATED"
-                promoted += 1
-                self._audit("CONSOLIDATE", rec.id, {"new_tier": "long_term", "confidence": rec.confidence})
-        return promoted
+        with self._lock:
+            promoted = 0
+            for rec in list(self.records.values()):
+                if rec.tier == "working" and rec.status == "ACTIVE" and rec.confidence >= 0.70:
+                    rec.tier = "long_term"
+                    rec.status = "CONSOLIDATED"
+                    promoted += 1
+                    self._audit("CONSOLIDATE", rec.id, {"new_tier": "long_term", "confidence": rec.confidence})
+            return promoted
 
     def _audit(self, action: str, record_id: str, details: Dict[str, Any]) -> None:
         """Appends an immutable event to the audit ledger."""
-        self.trust_ledger.append({
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "action": action,
-            "record_id": record_id,
-            "details": details
-        })
+        with self._lock:
+            self.trust_ledger.append({
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "action": action,
+                "record_id": record_id,
+                "details": details
+            })
