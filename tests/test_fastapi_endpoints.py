@@ -157,3 +157,72 @@ def test_run_investigation_technical_execution_format(client: TestClient) -> Non
     assert "ZetarisRetriever" in agent_names
     assert "SkepticalCritic" in agent_names
     assert "ActionReportWriter" in agent_names
+
+
+def test_zetaris_schema_endpoint(client: TestClient) -> None:
+    """Confirms GET /api/zetaris/schema returns the dual-silo catalog for TPCDS_DB and NY_TAXI."""
+    response = client.get("/api/zetaris/schema")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "CONNECTED"
+    assert "TPCDS_DB" in data["federated_silos"]
+    assert "NY_TAXI" in data["federated_silos"]
+    assert "databases" in data
+    assert "TPCDS_DB" in data["databases"]
+    assert "NY_TAXI" in data["databases"]
+
+    tpcds_tables = data["databases"]["TPCDS_DB"]["tables"]
+    assert "inventory" in tpcds_tables
+    assert "web_returns" in tpcds_tables
+    assert "item" in tpcds_tables
+
+    ny_tables = data["databases"]["NY_TAXI"]["tables"]
+    assert "trip_data" in ny_tables
+    assert "taxi_zones" in ny_tables
+
+
+def test_zetaris_query_endpoint(client: TestClient) -> None:
+    """Confirms POST /api/zetaris/query executes federated query with latency telemetry and coerced rows."""
+    payload = {
+        "sql": "SELECT ca_state, COUNT(*) AS return_cnt, SUM(wr_return_amt) AS total_return_amt FROM TPCDS_DB.web_returns GROUP BY ca_state LIMIT 5;",
+        "scenario_file": "scenario_1_electronics_q3.json"
+    }
+    response = client.post("/api/zetaris/query", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "SUCCESS"
+    assert data["row_count"] > 0
+    assert "latency_ms" in data
+    assert data["latency_ms"] > 0.0
+    assert "columns" in data
+    assert "rows" in data
+    assert len(data["rows"]) == data["row_count"]
+    assert "silos_involved" in data
+
+
+def test_export_markdown_endpoint(client: TestClient) -> None:
+    """Confirms GET /api/export/markdown returns downloadable markdown document with attachment header."""
+    response = client.get("/api/export/markdown?scenario_file=scenario_1_electronics_q3.json")
+    assert response.status_code == 200
+    assert "text/markdown" in response.headers.get("content-type", "")
+    assert "attachment" in response.headers.get("content-disposition", "")
+    assert "MarginWhy_Executive_Report" in response.headers.get("content-disposition", "")
+    assert len(response.text) > 100
+    assert "Executive Summary" in response.text
+
+
+def test_dashboard_has_studio_and_hmem_bento(client: TestClient) -> None:
+    """Confirms GET / includes the new Zetaris SQL Studio and Meterless H-MEM Inspector components."""
+    response = client.get("/")
+    assert response.status_code == 200
+    html = response.text
+    assert "tabStudio" in html
+    assert "btnRunStudio" in html
+    assert "studioSqlInput" in html
+    assert "studioCatalogTree" in html
+    assert "hmemCarryoverTokens" in html
+    assert "hmemLedgerCountBadge" in html
+    assert "tierShortTermList" in html
+    assert "tierWorkingList" in html
+    assert "tierLongTermList" in html
+    assert "downloadReportMarkdown" in html
