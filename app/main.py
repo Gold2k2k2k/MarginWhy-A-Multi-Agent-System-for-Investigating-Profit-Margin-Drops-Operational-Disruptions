@@ -719,8 +719,13 @@ async def index() -> str:
       margin: 1.5rem auto;
       padding: 0 2rem 3rem;
       display: grid;
-      grid-template-columns: 360px 1fr;
+      grid-template-columns: 360px minmax(0, 1fr);
       gap: 1.75rem;
+    }
+
+    /* PREVENT CSS GRID 1FR OVERFLOW TRAP */
+    .right-col, .left-col, .tabs-card, .tab-content, .tab-pane, .evidence-panel, .report-card {
+      min-width: 0;
     }
 
     /* CONTROL PANEL (LEFT COLUMN) */
@@ -728,6 +733,7 @@ async def index() -> str:
       display: flex;
       flex-direction: column;
       gap: 1.25rem;
+      min-width: 0;
     }
 
     .panel {
@@ -867,6 +873,7 @@ async def index() -> str:
       display: flex;
       flex-direction: column;
       gap: 1.5rem;
+      min-width: 0;
     }
 
     /* ADVERSARIAL STEPPER ARENA */
@@ -1025,12 +1032,15 @@ async def index() -> str:
       border-radius: var(--radius-xl);
       overflow: hidden;
       box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.5);
+      min-width: 0;
     }
 
     .tabs-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
+      flex-wrap: wrap;
+      gap: 0.75rem;
       border-bottom: 1px solid var(--border-subtle);
       background: rgba(11, 17, 32, 0.7);
       padding: 0 1.25rem;
@@ -1039,6 +1049,9 @@ async def index() -> str:
     .tabs-nav {
       display: flex;
       gap: 0.25rem;
+      overflow-x: auto;
+      scrollbar-width: thin;
+      max-width: 100%;
     }
 
     .tab-btn {
@@ -1094,10 +1107,12 @@ async def index() -> str:
     .tab-content {
       padding: 1.75rem;
       min-height: 480px;
+      min-width: 0;
     }
 
     .tab-pane {
       display: none;
+      min-width: 0;
     }
 
     /* WHAT-IF SIMULATOR PANEL (TAB 1) */
@@ -1437,6 +1452,7 @@ async def index() -> str:
       display: flex;
       flex-direction: column;
       gap: 1.5rem;
+      min-width: 0;
     }
 
     .evidence-header-card {
@@ -1464,6 +1480,8 @@ async def index() -> str:
       border-radius: var(--radius-lg);
       padding: 1.35rem;
       box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+      min-width: 0;
+      max-width: 100%;
     }
 
     .ev-card-top {
@@ -1621,6 +1639,8 @@ async def index() -> str:
       border-radius: var(--radius-md);
       margin: 1rem 0;
       overflow: hidden;
+      max-width: 100%;
+      overflow-x: auto;
     }
 
     .code-header {
@@ -1662,10 +1682,14 @@ async def index() -> str:
       color: #ffffff;
     }
 
-    .code-wrapper pre {
+    .code-wrapper pre,
+    .evidence-query-card pre {
       padding: 0.85rem 1rem;
+      max-width: 100%;
       overflow-x: auto;
       margin: 0;
+      white-space: pre-wrap;
+      word-break: break-word;
     }
 
     .code-wrapper code {
@@ -1797,8 +1821,10 @@ async def index() -> str:
       border: 1px solid var(--border-strong);
       border-radius: var(--radius-xl);
       max-width: 760px;
-      width: 100%;
-      padding: 2rem;
+      width: min(760px, 92vw);
+      max-height: 88vh;
+      overflow-y: auto;
+      padding: 1.75rem;
       box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8), 0 0 30px var(--primary-glow);
     }
 
@@ -1881,15 +1907,30 @@ async def index() -> str:
     .audit-pass { background: rgba(16, 185, 129, 0.2); color: #4ade80; border: 1px solid rgba(16, 185, 129, 0.4); }
     .audit-fail { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4); }
 
-    /* RESPONSIVE MEDIA QUERIES (1200px, 1024px, 640px) */
+    /* RESPONSIVE MEDIA QUERIES (1350px, 1200px, 1150px, 1024px, 640px) */
+    @media (max-width: 1350px) {
+      .stepper-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+      .bento-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
     @media (max-width: 1200px) {
       main {
-        grid-template-columns: 320px 1fr;
+        grid-template-columns: 320px minmax(0, 1fr);
         gap: 1.25rem;
         padding: 0 1.5rem 2.5rem;
       }
       .bento-grid {
         grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    @media (max-width: 1150px) {
+      .whatif-grid {
+        grid-template-columns: 1fr;
       }
     }
 
@@ -2114,8 +2155,8 @@ async def index() -> str:
       padding: 0.75rem;
       font-size: 0.75rem;
       font-family: 'JetBrains Mono', monospace;
-      max-height: 140px;
-      overflow-y: auto;
+      max-height: none;
+      overflow-y: visible;
       display: flex;
       flex-direction: column;
       gap: 0.4rem;
@@ -2144,8 +2185,9 @@ async def index() -> str:
     /* ZETARIS LIGHTNING SQL STUDIO */
     .studio-container {
       display: grid;
-      grid-template-columns: 310px 1fr;
+      grid-template-columns: minmax(260px, 280px) minmax(0, 1fr);
       gap: 1.5rem;
+      min-width: 0;
     }
     .studio-sidebar {
       background: var(--bg-card);
@@ -2229,18 +2271,22 @@ async def index() -> str:
       display: flex;
       flex-direction: column;
       gap: 1rem;
+      min-width: 0;
     }
     .studio-preset-bar {
       display: flex;
       align-items: center;
+      flex-wrap: wrap;
       gap: 0.75rem;
       background: var(--bg-card);
       border: 1px solid var(--border-subtle);
       border-radius: var(--radius-lg);
       padding: 0.75rem 1rem;
+      min-width: 0;
     }
     .studio-preset-select {
       flex: 1;
+      min-width: 0;
       background: var(--bg-surface);
       border: 1px solid var(--border-strong);
       border-radius: var(--radius-md);
@@ -2281,6 +2327,8 @@ async def index() -> str:
       display: flex;
       justify-content: space-between;
       align-items: center;
+      flex-wrap: wrap;
+      gap: 0.75rem;
       background: var(--bg-card);
       border: 1px solid var(--border-subtle);
       border-radius: var(--radius-md);
@@ -2290,6 +2338,7 @@ async def index() -> str:
     .studio-telemetry-left {
       display: flex;
       align-items: center;
+      flex-wrap: wrap;
       gap: 1rem;
     }
     .telemetry-pill {
@@ -2414,6 +2463,7 @@ async def index() -> str:
           <span>Scenario 3: Logistics Courier Rush</span>
           <span class="tag-drop">+22% Delivery Cost</span>
         </div>
+      </div>
       <div class="judge-actions">
         <a href="/slides" target="_blank" class="btn-slides" style="font-size: 0.76rem; font-weight: 700; padding: 0.45rem 1rem; border-radius: var(--radius-md); background: linear-gradient(135deg, #6366f1, #4f46e5); color: #ffffff; text-decoration: none; display: inline-flex; align-items: center; gap: 0.45rem; box-shadow: 0 2px 10px var(--primary-glow); transition: all 0.2s ease;">
           <svg class="icon-inline" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -2445,8 +2495,8 @@ async def index() -> str:
         </div>
 
         <div class="form-group">
-          <label>Target Anomaly Scenario</label>
-          <select id="scenarioSelect" onchange="onScenarioSelectChange()">
+          <label for="scenarioSelect">Target Anomaly Scenario</label>
+          <select id="scenarioSelect" aria-label="Target Anomaly Scenario" onchange="onScenarioSelectChange()">
             <option value="scenario_1_electronics_q3.json">Scenario 1: Electronics Q3 (-18.5% Net Margin)</option>
             <option value="scenario_2_apparel_returns.json">Scenario 2: Fall-Winter Apparel (-14.2% Revenue)</option>
             <option value="scenario_3_shipping_delay.json">Scenario 3: Suburban Courier Surge (+22% Cost)</option>
@@ -2454,8 +2504,8 @@ async def index() -> str:
         </div>
 
         <div class="form-group">
-          <label>Root-Cause Business Inquiry</label>
-          <textarea id="queryInput">Why did net profit margin for Electronics drop 18.5% in Q3?</textarea>
+          <label for="businessInquiryText">Root-Cause Business Inquiry</label>
+          <textarea id="businessInquiryText" name="queryInput" data-testid="queryInput" aria-label="Root-Cause Business Inquiry">Why did net profit margin for Electronics drop 18.5% in Q3?</textarea>
         </div>
 
         <div class="form-group" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem;">
@@ -2945,7 +2995,7 @@ async def index() -> str:
                 <!-- Preset Query Selector -->
                 <div class="studio-preset-bar">
                   <label style="font-size: 0.76rem; font-weight: 700; color: var(--text-muted); white-space: nowrap;">Benchmark Queries:</label>
-                  <select class="studio-preset-select" id="studioPresetSelect" onchange="onStudioPresetChange()">
+                  <select class="studio-preset-select" id="studioPresetSelect" aria-label="Zetaris Benchmark Query Presets" onchange="onStudioPresetChange()">
                     <option value="0">1. Cross-Silo: Inventory Levels vs NY Taxi Freight Surcharges (Compound Anomaly)</option>
                     <option value="1">2. TPCDS_DB: E-Commerce Product Return Rates &amp; Refund Volume by State</option>
                     <option value="2">3. TPCDS_DB: Supplier VN-702 Catalog Outerwear Returns &amp; Sizing Defects</option>
@@ -2974,7 +3024,7 @@ async def index() -> str:
                       </button>
                     </div>
                   </div>
-                  <textarea id="studioSqlInput" class="studio-sql-textarea" spellcheck="false" placeholder="Enter Zetaris Lightning SQL query across TPCDS_DB and NY_TAXI..."></textarea>
+                  <textarea id="studioSqlInput" aria-label="Zetaris Lightning SQL Query Editor" class="studio-sql-textarea" spellcheck="false" placeholder="Enter Zetaris Lightning SQL query across TPCDS_DB and NY_TAXI..."></textarea>
                 </div>
 
                 <!-- Execution Telemetry Bar -->
@@ -3048,6 +3098,30 @@ async def index() -> str:
   </div>
 
   <script>
+    // Backward compatibility polyfill for businessInquiryText & queryInput
+    const origGetElementById = document.getElementById.bind(document);
+    document.getElementById = function(id) {
+      if (id === "queryInput") {
+        return origGetElementById("businessInquiryText") || origGetElementById("queryInput");
+      }
+      return origGetElementById(id);
+    };
+    const origQuerySelector = document.querySelector.bind(document);
+    document.querySelector = function(sel) {
+      if (sel === "#queryInput") {
+        return origQuerySelector("#businessInquiryText") || origQuerySelector("#queryInput");
+      }
+      return origQuerySelector(sel);
+    };
+    const origQuerySelectorAll = document.querySelectorAll.bind(document);
+    document.querySelectorAll = function(sel) {
+      if (sel === "#queryInput") {
+        const el = origQuerySelector("#businessInquiryText") || origQuerySelector("#queryInput");
+        return el ? [el] : origQuerySelectorAll(sel);
+      }
+      return origQuerySelectorAll(sel);
+    };
+
     let rawReportMarkdown = "";
     let activeScenarioFile = "scenario_1_electronics_q3.json";
 
@@ -3322,7 +3396,8 @@ async def index() -> str:
 
       const def = SCENARIO_DEFAULTS[filename];
       if (def) {
-        document.getElementById("queryInput").value = def.query;
+        const queryEl = document.getElementById("businessInquiryText") || document.getElementById("queryInput");
+        if (queryEl) queryEl.value = def.query;
         document.getElementById("bentoMargin").textContent = def.margin;
         document.getElementById("bentoEbitda").textContent = def.ebitda;
       }
@@ -3340,7 +3415,8 @@ async def index() -> str:
 
       const def = SCENARIO_DEFAULTS[filename];
       if (def) {
-        document.getElementById("queryInput").value = def.query;
+        const queryEl = document.getElementById("businessInquiryText") || document.getElementById("queryInput");
+        if (queryEl) queryEl.value = def.query;
         document.getElementById("bentoMargin").textContent = def.margin;
         document.getElementById("bentoEbitda").textContent = def.ebitda;
       }
@@ -3631,7 +3707,8 @@ async def index() -> str:
       const btnText = document.getElementById("btnText");
       const btnIcon = document.getElementById("btnIcon");
       const scenario = document.getElementById("scenarioSelect").value;
-      const query = document.getElementById("queryInput").value;
+      const queryEl = document.getElementById("businessInquiryText") || document.getElementById("queryInput");
+      const query = queryEl ? queryEl.value : "";
 
       btn.disabled = true;
       btnIcon.innerHTML = `
