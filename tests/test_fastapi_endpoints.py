@@ -111,3 +111,49 @@ def test_auxiliary_api_endpoints(client: TestClient) -> None:
     assert "trust_ledger_count" in hmem_data
     assert "recent_ledger" in hmem_data
     assert "all_records" in hmem_data
+
+
+def test_slides_endpoint(client: TestClient) -> None:
+    """Confirms GET /slides delivers the strategic 8-slide presentation deck HTML."""
+    response = client.get("/slides")
+    assert response.status_code == 200
+    assert "text/html" in response.headers.get("content-type", "")
+    html = response.text
+    assert "<title>MarginWhy — Executive Hackathon Presentation Deck</title>" in html
+    assert 'id="slide-1"' in html
+    assert 'id="slide-8"' in html
+    assert "Track 02" in html
+    assert "NVIDIA Nemotron" in html
+    assert "Zetaris" in html
+    assert "Meterless H-MEM" in html
+    assert "slideCounter" in html
+
+
+def test_run_investigation_technical_execution_format(client: TestClient) -> None:
+    """Confirms POST /run accepts the nested input/options contract from technical execution requirements."""
+    payload = {
+        "run_id": "test-hackathon-audit-001",
+        "input": {
+            "query": "Why did net profit margin for Electronics drop 18.5% in Q3?"
+        },
+        "options": {
+            "sample_mode": True
+        }
+    }
+    response = client.post("/run", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "SUCCESS"
+    assert data["run_id"] == "test-hackathon-audit-001"
+    assert "execution_time_seconds" in data
+    assert "output" in data
+    assert "summary" in data["output"]
+    assert "recommendations" in data["output"]
+    assert len(data["output"]["recommendations"]) >= 1
+    assert "agents" in data
+    assert len(data["agents"]) == 4
+    agent_names = [a["name"] for a in data["agents"]]
+    assert "HypothesisPlanner" in agent_names
+    assert "ZetarisRetriever" in agent_names
+    assert "SkepticalCritic" in agent_names
+    assert "ActionReportWriter" in agent_names

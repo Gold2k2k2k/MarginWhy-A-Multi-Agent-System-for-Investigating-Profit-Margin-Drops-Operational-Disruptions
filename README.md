@@ -7,7 +7,9 @@
 [![Zetaris](https://img.shields.io/badge/Data_Harness-Zetaris_Lightning_SQL-0080FF.svg)](https://github.com/zetaris/getting-started)
 [![Meterless](https://img.shields.io/badge/Memory-Meterless_H--MEM-purple.svg)](https://github.com/Meterless/H-MEM)
 [![Cursor](https://img.shields.io/badge/Engineered_With-Cursor_IDE-00D2FF.svg)](https://cursor.com)
-[![Tests](https://img.shields.io/badge/Tests-103%20Passed%20(100%25)-brightgreen.svg)]()
+[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg)](Dockerfile)
+[![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Gold2k2k2k/MarginWhy-A-Multi-Agent-System-for-Investigating-Profit-Margin-Drops-Operational-Disruptions/blob/main/notebooks/marginwhy_quickstart.ipynb)
+[![Tests](https://img.shields.io/badge/Tests-110%20Passed%20(100%25)-brightgreen.svg)]()
 [![Audit](https://img.shields.io/badge/Submission_Audit-5%2F5%20PASS-brightgreen.svg)]()
 [![License](https://img.shields.io/badge/License-MIT-lightgrey.svg)](LICENSE)
 
@@ -20,6 +22,7 @@
 
 To verify our complete submission against the **Open Agent Hackathon Section 5.1 Verification Matrix** in under 60 seconds:
 
+### Option A: Local Python Setup (< 60s)
 ```bash
 # 1. Clone & install dependencies (< 30s)
 git clone https://github.com/Gold2k2k2k/MarginWhy-A-Multi-Agent-System-for-Investigating-Profit-Margin-Drops-Operational-Disruptions.git
@@ -32,10 +35,21 @@ python scripts/verify_submission.py
 # 3. Run the CLI multi-agent investigation in offline sample mode (takes 0.35s)
 python run.py --sample-mode
 
-# 4. Launch the Executive Command Console Web Dashboard
+# 4. Launch the Executive Command Console Web Dashboard & Strategic Slide Deck
 python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
-👉 *Open [http://127.0.0.1:8000](http://127.0.0.1:8000) in your browser to experience the 5-Zone Executive Command Console, Pure SVG Waterfall Chart, and interactive What-If EBITDA Simulator.*
+
+### Option B: 1-Command Docker Setup
+```bash
+docker compose up --build
+```
+
+### Option C: 1-Click Interactive Google Colab Notebook
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Gold2k2k2k/MarginWhy-A-Multi-Agent-System-for-Investigating-Profit-Margin-Drops-Operational-Disruptions/blob/main/notebooks/marginwhy_quickstart.ipynb)
+
+👉 *Open [http://127.0.0.1:8000](http://127.0.0.1:8000) for the Executive Command Console Dashboard.*  
+👉 *Open [http://127.0.0.1:8000/slides](http://127.0.0.1:8000/slides) for the Strategic 8-Slide Hackathon Presentation Deck.*
+
 
 ---
 
@@ -192,8 +206,11 @@ python scripts/verify_submission.py
 
 ```text
 ├── run.py                          # Unified CLI entry point (--query, --input, --sample-mode)
+├── main.py                         # Root ASGI entry point for Vercel & uvicorn
 ├── metadata.json                   # Official Hackathon submission metadata & tech stack declaration
-├── vercel.json                     # Vercel Serverless deployment configuration
+├── vercel.json                     # Vercel deployment configuration
+├── Dockerfile                      # Production container image (Python 3.12-slim)
+├── docker-compose.yml              # 1-command reproducible Docker deployment
 ├── .python-version                 # Pinned Python version (3.12)
 ├── favicon.svg                     # Custom cybernetic multi-agent financial diagnostic favicon
 ├── requirements.txt                # Production dependencies (FastAPI, Uvicorn, Pydantic, Rich, Pytest)
@@ -201,6 +218,7 @@ python scripts/verify_submission.py
 │   └── index.py                    # Vercel Serverless ASGI entry point
 ├── app/
 │   ├── main.py                     # FastAPI application & Executive Command Console UI Dashboard
+│   ├── slides.py                   # Strategic 8-Slide presentation deck generator (/slides)
 │   ├── adapters/
 │   │   └── zetaris_adapter.py      # Zetaris REST/Lightning SQL adapter with sample fallback
 │   ├── memory/
@@ -218,17 +236,24 @@ python scripts/verify_submission.py
 │       ├── scenario_1_electronics_q3.json
 │       ├── scenario_2_apparel_returns.json
 │       └── scenario_3_shipping_delay.json
+├── docs/                           # Official Hackathon deliverables
+│   ├── DEMO_VIDEO_SCRIPT.md        # 3-minute timestamped recording script & storyboard
+│   └── SUBMISSION_DELIVERABLES.md  # Complete HackOS submission worksheet & 100-point rubric
+├── notebooks/
+│   └── marginwhy_quickstart.ipynb  # 1-Click interactive Google Colab notebook
 ├── logs/
 │   └── trace.jsonl                 # Structured JSONL event audit trace log
 ├── scripts/
 │   └── verify_submission.py        # Automated 5-point submission readiness audit script
-└── tests/                          # 103 Automated unit, adversarial & conformance tests
+└── tests/                          # 110 Automated unit, adversarial & conformance tests
     ├── test_hmem_conformance.py    # Official Meterless H-MEM conformance suite (8 tests)
-    ├── test_fastapi_endpoints.py   # FastAPI web & API route tests (5 tests)
+    ├── test_fastapi_endpoints.py   # FastAPI web, API, and slides route tests (7 tests)
     ├── test_fastapi_adversarial.py # Adversarial API fuzzing & concurrency tests (18 tests)
     ├── test_verify_submission.py   # Submission auditor unit tests (5 tests)
-    └── test_adversarial_verify_submission.py # Boundary & fault-injection tests (67 tests)
+    ├── test_adversarial_verify_submission.py # Boundary & fault-injection tests (67 tests)
+    └── test_docker_and_deliverables.py       # Docker, Colab, and deliverables tests (5 tests)
 ```
+
 
 ---
 

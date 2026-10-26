@@ -33,6 +33,9 @@
   "execution": {
     "cli_command": "python run.py --query \"Why did net profit margin for Electronics drop 18.5% in Q3?\" --sample-mode",
     "dashboard_command": "uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload",
+    "docker_command": "docker compose up --build",
+    "slides_url": "http://localhost:8000/slides",
     "test_command": "pytest tests/test_hmem_conformance.py -v"
   }
 }
+
