@@ -74,3 +74,16 @@ def test_submission_deliverables_worksheet():
     assert "Meterless H-MEM" in content
     assert "NVIDIA Nemotron" in content
     assert "Cursor IDE" in content
+
+
+def test_dockerignore_configuration():
+    """Confirms .dockerignore exists and excludes sensitive and build artifact files."""
+    dockerignore = REPO_ROOT / ".dockerignore"
+    assert dockerignore.exists(), ".dockerignore must exist at repository root"
+    content = dockerignore.read_text(encoding="utf-8")
+    lines = [line.strip() for line in content.splitlines() if line.strip() and not line.startswith("#")]
+    assert ".git" in lines
+    assert ".env" in lines
+    assert ".venv" in lines
+    assert "__pycache__" in lines
+

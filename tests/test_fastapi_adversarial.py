@@ -324,3 +324,134 @@ def test_concurrent_run_requests_thread_safety(client: TestClient) -> None:
                 corrupted_lines.append((line_no, line_str, str(e)))
 
     assert len(corrupted_lines) == 0, f"Found corrupted JSON lines in trace.jsonl: {corrupted_lines}"
+
+
+# ============================================================================
+# 5. Post-Merge Endpoints Adversarial & Traversal Security
+# ============================================================================
+
+def test_export_markdown_path_traversal_rejected(client: TestClient) -> None:
+    """GET /api/export/markdown with path traversal must return HTTP 400."""
+    resp = client.get("/api/export/markdown?scenario_file=../../secret.txt")
+    assert resp.status_code == 400
+    assert "path traversal is not permitted" in resp.json()["detail"]
+
+    resp2 = client.get("/api/export/markdown?scenario_file=..\\..\\secret.txt")
+    assert resp2.status_code == 400
+
+
+def test_export_markdown_sanitized_attachment_header(client: TestClient) -> None:
+    """GET /api/export/markdown ensures filename header has no special characters or injection."""
+    resp = client.get("/api/export/markdown?scenario_file=scenario_1_electronics_q3.json")
+    assert resp.status_code == 200
+    cd = resp.headers.get("content-disposition", "")
+    assert 'filename="MarginWhy_Executive_Report_scenario_1_electronics_q3.md"' in cd
+
+
+def test_zetaris_query_path_traversal_rejected(client: TestClient) -> None:
+    """POST /api/zetaris/query with path traversal in scenario_file must return HTTP 400."""
+    resp = client.post("/api/zetaris/query", json={
+        "sql": "SELECT 1;",
+        "scenario_file": "../../secret.txt"
+    })
+    assert resp.status_code == 400
+    assert "path traversal is not permitted" in resp.json()["detail"]
+
+
+def test_scenarios_cache_refresh(client: TestClient) -> None:
+    """GET /api/scenarios?refresh=true forces scenario cache reload."""
+    resp = client.get("/api/scenarios?refresh=true")
+    assert resp.status_code == 200
+    scenarios = resp.json()
+    assert isinstance(scenarios, list)
+    assert len(scenarios) >= 3
+
+
+def test_export_markdown_windows_drive_and_null_byte_rejected(client: TestClient) -> None:
+    """GET /api/export/markdown rejects Windows drive letter paths and null bytes with HTTP 400."""
+    resp_drive = client.get("/api/export/markdown?scenario_file=C:secret.txt")
+    assert resp_drive.status_code == 400
+    assert "path traversal is not permitted" in resp_drive.json()["detail"]
+
+    resp_null = client.get("/api/export/markdown?scenario_file=test%00abc")
+    assert resp_null.status_code == 400
+    assert "null bytes" in resp_null.json()["detail"]
+
+
+def test_zetaris_query_windows_drive_and_null_byte_rejected(client: TestClient) -> None:
+    """POST /api/zetaris/query rejects Windows drive letter paths and null bytes with HTTP 400."""
+    resp_drive = client.post("/api/zetaris/query", json={
+        "sql": "SELECT 1;",
+        "scenario_file": "C:secret.txt"
+    })
+    assert resp_drive.status_code == 400
+    assert "path traversal is not permitted" in resp_drive.json()["detail"]
+
+    resp_null = client.post("/api/zetaris/query", json={
+        "sql": "SELECT 1;",
+        "scenario_file": "test\x00abc"
+    })
+    assert resp_null.status_code == 400
+    assert "null bytes" in resp_null.json()["detail"]
+
+
+def test_run_investigation_windows_drive_and_null_byte_rejected(client: TestClient) -> None:
+    """POST /run rejects Windows drive letters, null bytes, and traversal in scenario_file with HTTP 400."""
+    resp_drive = client.post("/run", json={"scenario_file": "C:secret.txt"})
+    assert resp_drive.status_code == 400
+    assert "path traversal is not permitted" in resp_drive.json()["detail"]
+
+    resp_null = client.post("/run", json={"scenario_file": "test\x00abc"})
+    assert resp_null.status_code == 400
+    assert "null bytes" in resp_null.json()["detail"]
+
+
+def test_run_investigation_input_nested_traversal_rejected(client: TestClient) -> None:
+    """POST /run rejects traversal and invalid types supplied within the nested input dictionary."""
+    resp_nested = client.post("/run", json={
+        "input": {"scenario_file": "C:secret.txt"}
+    })
+    assert resp_nested.status_code == 400
+    assert "path traversal is not permitted" in resp_nested.json()["detail"]
+
+    resp_invalid_type = client.post("/run", json={
+        "input": {"scenario_file": [1, 2, 3]}
+    })
+    assert resp_invalid_type.status_code == 400
+    assert "must be a string" in resp_invalid_type.json()["detail"]
+
+
+def test_run_investigation_nested_query_and_sample_mode_type_validation(client: TestClient) -> None:
+    """POST /run rejects invalid types for query in input and sample_mode in options with HTTP 400."""
+    # query as list in input
+    resp_query_list = client.post("/run", json={"input": {"query": [1, 2, 3]}})
+    assert resp_query_list.status_code == 400
+    assert "Invalid query: must be a string." in resp_query_list.json()["detail"]
+
+    # query as dict in input
+    resp_query_dict = client.post("/run", json={"input": {"query": {"bad": "type"}}})
+    assert resp_query_dict.status_code == 400
+    assert "Invalid query: must be a string." in resp_query_dict.json()["detail"]
+
+    # sample_mode as string in options
+    resp_sample_str = client.post("/run", json={"options": {"sample_mode": "not_bool"}})
+    assert resp_sample_str.status_code == 400
+    assert "Invalid sample_mode: must be a boolean." in resp_sample_str.json()["detail"]
+
+    # sample_mode as list in options
+    resp_sample_list = client.post("/run", json={"options": {"sample_mode": [True, False]}})
+    assert resp_sample_list.status_code == 400
+    assert "Invalid sample_mode: must be a boolean." in resp_sample_list.json()["detail"]
+
+
+def test_run_investigation_nested_run_id_type_validation(client: TestClient) -> None:
+    """POST /run rejects non-string run_id in input with HTTP 400."""
+    resp_run_id_list = client.post("/run", json={"input": {"run_id": [1, 2, 3]}})
+    assert resp_run_id_list.status_code == 400
+    assert "Invalid run_id: must be a string." in resp_run_id_list.json()["detail"]
+
+    resp_run_id_dict = client.post("/run", json={"input": {"run_id": {"nested": "id"}}})
+    assert resp_run_id_dict.status_code == 400
+    assert "Invalid run_id: must be a string." in resp_run_id_dict.json()["detail"]
+
+

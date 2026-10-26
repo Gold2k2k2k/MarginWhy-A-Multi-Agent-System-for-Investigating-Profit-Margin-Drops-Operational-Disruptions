@@ -53,6 +53,8 @@ class ZetarisAdapter:
         """Resolves sample path whether executed from repo root or subdirectories."""
         base_dir = Path(__file__).resolve().parent.parent.parent
         samples_dir = (base_dir / "data" / "samples").resolve()
+        if not scenario_file or "\x00" in scenario_file or ":" in scenario_file:
+            return samples_dir / "__invalid_traversal__"
         target_path = (samples_dir / scenario_file).resolve()
         try:
             target_path.relative_to(samples_dir)

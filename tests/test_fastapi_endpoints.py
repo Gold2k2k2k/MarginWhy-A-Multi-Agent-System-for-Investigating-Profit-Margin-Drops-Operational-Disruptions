@@ -226,3 +226,30 @@ def test_dashboard_has_studio_and_hmem_bento(client: TestClient) -> None:
     assert "tierWorkingList" in html
     assert "tierLongTermList" in html
     assert "downloadReportMarkdown" in html
+
+
+def test_audit_endpoint(client: TestClient) -> None:
+    """Confirms GET /api/audit and POST /api/audit trigger verify_submission and return 100% PASS."""
+    for method in [client.get, client.post]:
+        response = method("/api/audit")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "PASSED"
+        assert data["all_passed"] is True
+        assert data["total_checks"] == 5
+        assert data["passed_checks"] == 5
+        assert isinstance(data["results"], list)
+        assert len(data["results"]) == 5
+        chk_ids = [r["id"] for r in data["results"]]
+        assert "CHK-1" in chk_ids
+        assert "CHK-5" in chk_ids
+
+
+def test_favicon_endpoints(client: TestClient) -> None:
+    """Confirms /favicon.ico and /favicon.svg deliver SVG icon with HTTP 200."""
+    for path in ["/favicon.ico", "/favicon.svg"]:
+        response = client.get(path)
+        assert response.status_code == 200
+        assert "image/svg+xml" in response.headers.get("content-type", "")
+        assert "<svg" in response.text
+

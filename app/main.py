@@ -1,6 +1,7 @@
 import json
 import os
 from pathlib import Path
+import re
 import time
 from typing import Any, Dict, List, Optional
 import uuid
@@ -35,23 +36,83 @@ class StudioQueryRequest(BaseModel):
     scenario_file: Optional[str] = None
 
 
-@app.get("/health")
-def health_check() -> Dict[str, Any]:
-    return {
-        "status": "HEALTHY",
-        "system": "MarginWhy",
-        "version": "1.0.0",
-        "hmem_status": "READY",
-        "track": "Track 02: The Agent That Can Explain Why",
-        "model": os.getenv("NVIDIA_MODEL_NAME", "nvidia/nemotron-3-super-120b-a12b"),
-        "sample_mode": os.getenv("SAMPLE_MODE", "true").lower() == "true",
-        "records_in_memory": len(orchestrator.hmem.records),
-        "trust_ledger_mutations": len(orchestrator.hmem.trust_ledger)
-    }
+def _validate_scenario_file(scenario_file: Any) -> Optional[str]:
+    """Validates that scenario_file is a safe, simple filename without directory traversal, drive letters, or control characters."""
+    if scenario_file is None:
+        return None
+    if not isinstance(scenario_file, str):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid scenario_file: must be a string."
+        )
+    scenario_str = scenario_file.strip()
+    if not scenario_str:
+        return None
+    if "\x00" in scenario_str:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid scenario_file: embedded null bytes are not permitted."
+        )
+    if (
+        ".." in scenario_str
+        or "/" in scenario_str
+        or "\\" in scenario_str
+        or ":" in scenario_str
+        or Path(scenario_str).name != scenario_str
+        or Path(scenario_str).is_absolute()
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid scenario_file '{scenario_str}': path traversal is not permitted."
+        )
+    return scenario_str
 
 
-@app.get("/api/scenarios")
-def list_scenarios() -> List[Dict[str, Any]]:
+def _validate_query(query: Any) -> Optional[str]:
+    """Validates that query is a string or None, stripping whitespace."""
+    if query is None:
+        return None
+    if not isinstance(query, str):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid query: must be a string."
+        )
+    q_str = query.strip()
+    return q_str if q_str else None
+
+
+def _validate_sample_mode(sample_mode: Any) -> Optional[bool]:
+    """Validates that sample_mode is a boolean or None."""
+    if sample_mode is None:
+        return None
+    if not isinstance(sample_mode, bool):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid sample_mode: must be a boolean."
+        )
+    return sample_mode
+
+
+def _validate_run_id(run_id: Any) -> Optional[str]:
+    """Validates that run_id is a string or None."""
+    if run_id is None:
+        return None
+    if not isinstance(run_id, str):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid run_id: must be a string."
+        )
+    rid_str = run_id.strip()
+    return rid_str if rid_str else None
+
+
+_scenarios_cache: Optional[List[Dict[str, Any]]] = None
+
+
+def _load_scenarios(force_reload: bool = False) -> List[Dict[str, Any]]:
+    global _scenarios_cache
+    if _scenarios_cache is not None and not force_reload:
+        return _scenarios_cache
     samples_dir = Path(__file__).resolve().parent.parent / "data" / "samples"
     scenarios = []
     if samples_dir.exists():
@@ -71,7 +132,28 @@ def list_scenarios() -> List[Dict[str, Any]]:
                     })
             except Exception:
                 continue
-    return scenarios
+    _scenarios_cache = scenarios
+    return _scenarios_cache
+
+
+@app.get("/health")
+async def health_check() -> Dict[str, Any]:
+    return {
+        "status": "HEALTHY",
+        "system": "MarginWhy",
+        "version": "1.0.0",
+        "hmem_status": "READY",
+        "track": "Track 02: The Agent That Can Explain Why",
+        "model": os.getenv("NVIDIA_MODEL_NAME", "nvidia/nemotron-3-super-120b-a12b"),
+        "sample_mode": os.getenv("SAMPLE_MODE", "true").lower() == "true",
+        "records_in_memory": len(orchestrator.hmem.records),
+        "trust_ledger_mutations": len(orchestrator.hmem.trust_ledger)
+    }
+
+
+@app.get("/api/scenarios")
+async def list_scenarios(refresh: bool = False) -> List[Dict[str, Any]]:
+    return [dict(s) for s in _load_scenarios(force_reload=refresh)]
 
 
 @app.get("/api/trace")
@@ -100,7 +182,7 @@ def get_trace_log(limit: int = 50) -> List[Dict[str, Any]]:
 
 
 @app.get("/api/hmem")
-def get_hmem_state() -> Dict[str, Any]:
+async def get_hmem_state() -> Dict[str, Any]:
     carryover = orchestrator.hmem.build_markovian_carryover()
     return {
         "carryover": carryover,
@@ -111,7 +193,7 @@ def get_hmem_state() -> Dict[str, Any]:
 
 
 @app.get("/api/zetaris/schema")
-def get_zetaris_schema() -> Dict[str, Any]:
+async def get_zetaris_schema() -> Dict[str, Any]:
     """Returns the dual-silo federated catalog schema for TPCDS_DB and NY_TAXI."""
     return orchestrator.retriever.adapter.get_catalog_schema()
 
@@ -119,7 +201,8 @@ def get_zetaris_schema() -> Dict[str, Any]:
 @app.post("/api/zetaris/query")
 def execute_zetaris_query(req: StudioQueryRequest) -> Dict[str, Any]:
     """Executes an interactive query in the Zetaris Lightning SQL Studio."""
-    res = orchestrator.retriever.adapter.execute_studio_query(req.sql, req.scenario_file)
+    validated_scenario = _validate_scenario_file(req.scenario_file)
+    res = orchestrator.retriever.adapter.execute_studio_query(req.sql, validated_scenario)
     orchestrator._log_event({
         "agent": "ZetarisRetriever",
         "event": "ZETARIS_STUDIO_QUERY",
@@ -133,7 +216,8 @@ def execute_zetaris_query(req: StudioQueryRequest) -> Dict[str, Any]:
 @app.get("/api/export/markdown")
 def export_markdown_report(scenario_file: Optional[str] = None) -> Response:
     """Exports executive investigation action report as a downloadable Markdown document."""
-    scenario = scenario_file or "scenario_1_electronics_q3.json"
+    validated_scenario = _validate_scenario_file(scenario_file)
+    scenario = validated_scenario or "scenario_1_electronics_q3.json"
     sample_path = Path(__file__).resolve().parent.parent / "data" / "samples" / scenario
     query = "Investigate profit margin anomaly"
     if sample_path.exists():
@@ -144,7 +228,8 @@ def export_markdown_report(scenario_file: Optional[str] = None) -> Response:
             pass
     res = orchestrator.run_investigation(query=query, scenario_file=scenario)
     md_content = res.get("report_markdown", "")
-    filename = f"MarginWhy_Executive_Report_{scenario.replace('.json', '')}.md"
+    clean_stem = re.sub(r"[^a-zA-Z0-9_\-]", "_", Path(scenario).stem)
+    filename = f"MarginWhy_Executive_Report_{clean_stem}.md"
     return Response(
         content=md_content,
         media_type="text/markdown; charset=utf-8",
@@ -177,7 +262,7 @@ def run_submission_audit() -> Dict[str, Any]:
 
 
 @app.get("/slides", response_class=HTMLResponse)
-def presentation_slides() -> str:
+async def presentation_slides() -> str:
     """Delivers the Strategic 8-Slide Hackathon Presentation Deck."""
     return get_slides_html()
 
@@ -185,24 +270,23 @@ def presentation_slides() -> str:
 @app.post("/run")
 def run_investigation(req: RunRequest) -> Dict[str, Any]:
     start_time = time.time()
-    run_id = req.run_id or f"run_{uuid.uuid4().hex[:8]}"
 
-    # Extract query from top-level query or input dict
-    query = req.query
-    if not query and req.input and isinstance(req.input, dict):
-        query = req.input.get("query")
+    # Extract and validate run_id
+    raw_run_id = req.run_id
+    if raw_run_id is None and req.input and isinstance(req.input, dict):
+        raw_run_id = req.input.get("run_id")
+    validated_run_id = _validate_run_id(raw_run_id)
+    run_id = validated_run_id or f"run_{uuid.uuid4().hex[:8]}"
 
-    scenario = req.scenario_file
+    # Extract and validate query from top-level query or input dict
+    raw_query = req.query
+    if raw_query is None and req.input and isinstance(req.input, dict):
+        raw_query = req.input.get("query")
+    query = _validate_query(raw_query)
+
+    scenario = _validate_scenario_file(req.scenario_file)
     if not scenario and req.input and isinstance(req.input, dict):
-        scenario = req.input.get("scenario_file")
-
-    # Validate scenario_file against directory traversal
-    if scenario:
-        if ".." in scenario or "/" in scenario or "\\" in scenario:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid scenario_file '{scenario}': path traversal is not permitted."
-            )
+        scenario = _validate_scenario_file(req.input.get("scenario_file"))
 
     # If scenario not specified, infer from query keywords if query is present
     if not scenario and query:
@@ -216,10 +300,11 @@ def run_investigation(req: RunRequest) -> Dict[str, Any]:
     elif not scenario:
         scenario = "scenario_1_electronics_q3.json"
 
-    # Configure sample mode from options dict or top-level field
-    sample_mode = req.sample_mode
-    if sample_mode is None and req.options and isinstance(req.options, dict):
-        sample_mode = req.options.get("sample_mode")
+    # Configure sample mode from options dict or top-level field with type validation
+    raw_sample_mode = req.sample_mode
+    if raw_sample_mode is None and req.options and isinstance(req.options, dict):
+        raw_sample_mode = req.options.get("sample_mode")
+    sample_mode = _validate_sample_mode(raw_sample_mode)
     if sample_mode is not None:
         orchestrator.sample_mode = sample_mode
         os.environ["SAMPLE_MODE"] = "true" if sample_mode else "false"
@@ -305,12 +390,12 @@ FAVICON_SVG = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
 
 @app.get("/favicon.ico", include_in_schema=False)
 @app.get("/favicon.svg", include_in_schema=False)
-def favicon_ico() -> Response:
+async def favicon_ico() -> Response:
     return Response(content=FAVICON_SVG, media_type="image/svg+xml")
 
 
 @app.get("/", response_class=HTMLResponse)
-def index() -> str:
+async def index() -> str:
     """Delivers the Executive Multi-Agent Root-Cause Diagnostic Dashboard."""
     return r'''<!DOCTYPE html>
 <html lang="en">
