@@ -253,3 +253,73 @@ def test_favicon_endpoints(client: TestClient) -> None:
         assert "image/svg+xml" in response.headers.get("content-type", "")
         assert "<svg" in response.text
 
+
+def test_run_investigation_custom_entities(client: TestClient) -> None:
+    """Confirms POST /run extracts structured query entities and reflects them in the report and response."""
+    payload = {
+        "query": "Why did gross margin for Home Appliances drop 21.4% in Midwest during Q2?",
+        "sample_mode": True
+    }
+    response = client.post("/run", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "SUCCESS"
+    assert "entities" in data
+    entities = data["entities"]
+    assert entities.get("category") == "Home Appliances"
+    assert entities.get("region") == "Midwest"
+    assert entities.get("timeframe") == "Q2"
+    assert entities.get("metric_delta_pct") == 21.4
+    assert entities.get("metric") == "gross margin"
+
+    # Verify synthesized report dynamically injects extracted domain entities
+    report = data.get("report") or data.get("report_markdown", "")
+    assert "Home Appliances" in report
+    assert "Midwest" in report
+
+
+def test_zetaris_discovery_commands(client: TestClient) -> None:
+    """Confirms all 6 official discovery SQL commands return valid schema and row telemetry."""
+    discovery_queries = [
+        ("SELECT 1 AS one;", ["one"]),
+        ("SHOW SERVER VERSION;", ["server_version", "status"]),
+        ("SHOW LIGHTNING DATABASES;", ["database_name", "type"]),
+        ("SHOW LIGHTNING TABLES TPCDS_DB;", ["table_name", "database"]),
+        ("SHOW LIGHTNING TABLES NY_TAXI;", ["table_name", "database"]),
+        ("DESCRIBE DATASOURCE TABLE NY_TAXI.taxi_zones;", ["column_name", "data_type"])
+    ]
+
+    for sql, expected_cols in discovery_queries:
+        payload = {"sql": sql, "scenario_file": "scenario_1_electronics_q3.json"}
+        resp = client.post("/api/zetaris/query", json=payload)
+        assert resp.status_code == 200, f"Query failed: {sql}"
+        res = resp.json()
+        assert res["status"] == "SUCCESS", f"Expected SUCCESS for {sql}"
+        assert res["row_count"] > 0, f"Expected non-empty rows for {sql}"
+        for col in expected_cols:
+            assert col in res["columns"], f"Expected column {col} in {res['columns']} for {sql}"
+
+
+def test_export_trace_endpoint(client: TestClient) -> None:
+    """Confirms GET /api/export/trace streams trace.jsonl as a downloadable attachment."""
+    response = client.get("/api/export/trace")
+    assert response.status_code == 200
+    assert "attachment" in response.headers.get("content-disposition", "")
+    assert "trace.jsonl" in response.headers.get("content-disposition", "")
+    assert len(response.text) > 0
+
+
+def test_telemetry_endpoint(client: TestClient) -> None:
+    """Confirms GET /api/telemetry serves project metadata, model configurations, and token compression metrics."""
+    response = client.get("/api/telemetry")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "HEALTHY"
+    assert "model" in data
+    assert "meterless_base_url" in data
+    assert "metadata" in data
+    assert "metrics" in data
+    assert data["metrics"]["token_compression_ratio"] == "98.3%"
+    assert data["metrics"]["adversarial_threshold"] == 0.70
+
+

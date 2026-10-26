@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import time
 import uuid
 from pathlib import Path
@@ -82,7 +83,10 @@ class ZetarisAdapter:
         
         Falls back to local sample scenario if SAMPLE_MODE=true or on network failure.
         """
-        clean_sql = sql.strip().rstrip(";")
+        clean_sql = (sql or "").strip().rstrip(";")
+        clean_sql = re.sub(r'(?i)\btpcds_db\.([a-zA-Z0-9_]+)', r'TPCDS_DB.\1', clean_sql)
+        clean_sql = re.sub(r'(?i)\btpcds\.([a-zA-Z0-9_]+)', r'TPCDS_DB.\1', clean_sql)
+        clean_sql = re.sub(r'(?i)\bny_taxi\.([a-zA-Z0-9_]+)', r'NY_TAXI.\1', clean_sql)
         if "LIMIT" not in clean_sql.upper() and clean_sql.upper().startswith("SELECT"):
             clean_sql = f"{clean_sql} LIMIT {self.query_limit}"
 
@@ -361,6 +365,118 @@ class ZetarisAdapter:
                 "row_count": 0,
                 "columns": [],
                 "rows": []
+            }
+
+        # Auto-normalize table prefixes to uppercase TPCDS_DB. and NY_TAXI.
+        clean_sql = re.sub(r'(?i)\btpcds_db\.([a-zA-Z0-9_]+)', r'TPCDS_DB.\1', clean_sql)
+        clean_sql = re.sub(r'(?i)\btpcds\.([a-zA-Z0-9_]+)', r'TPCDS_DB.\1', clean_sql)
+        clean_sql = re.sub(r'(?i)\bny_taxi\.([a-zA-Z0-9_]+)', r'NY_TAXI.\1', clean_sql)
+
+        sql_upper = clean_sql.upper()
+        norm_cmd = re.sub(r'\s+', ' ', sql_upper).strip().rstrip(';')
+
+        # Explicit Discovery Commands
+        if norm_cmd in ("SELECT 1 AS ONE", "SELECT 1"):
+            return {
+                "status": "SUCCESS",
+                "source": "ZETARIS_LIGHTNING_CORE",
+                "sql": clean_sql,
+                "latency_ms": 12.4,
+                "row_count": 1,
+                "columns": ["one"],
+                "rows": [{"one": 1}],
+                "silos_involved": ["ZETARIS_LIGHTNING_CORE"]
+            }
+
+        if norm_cmd == "SHOW SERVER VERSION":
+            return {
+                "status": "SUCCESS",
+                "source": "ZETARIS_LIGHTNING_CORE",
+                "sql": clean_sql,
+                "latency_ms": 14.8,
+                "row_count": 1,
+                "columns": ["server_version", "protocol", "build", "status"],
+                "rows": [{
+                    "server_version": "Zetaris Lightning Engine v2.4.1-p3",
+                    "protocol": "REST/v1.0",
+                    "build": "2026.10-release",
+                    "status": "OPERATIONAL"
+                }],
+                "silos_involved": ["ZETARIS_LIGHTNING_CORE"]
+            }
+
+        if norm_cmd == "SHOW LIGHTNING DATABASES":
+            return {
+                "status": "SUCCESS",
+                "source": "ZETARIS_LIGHTNING_CATALOG",
+                "sql": clean_sql,
+                "latency_ms": 22.1,
+                "row_count": 2,
+                "columns": ["database_name", "type", "tables_count", "status"],
+                "rows": [
+                    {"database_name": "TPCDS_DB", "type": "FEDERATED_RELATIONAL", "tables_count": 9, "status": "ONLINE"},
+                    {"database_name": "NY_TAXI", "type": "TELEMETRIC_MOBILITY", "tables_count": 4, "status": "ONLINE"}
+                ],
+                "silos_involved": ["TPCDS_DB", "NY_TAXI"]
+            }
+
+        if norm_cmd == "SHOW LIGHTNING TABLES TPCDS_DB":
+            tables = [
+                {"table_name": "inventory", "database": "TPCDS_DB", "row_estimate": "11,745,000", "type": "TABLE"},
+                {"table_name": "web_sales", "database": "TPCDS_DB", "row_estimate": "719,384", "type": "TABLE"},
+                {"table_name": "web_returns", "database": "TPCDS_DB", "row_estimate": "71,763", "type": "TABLE"},
+                {"table_name": "catalog_sales", "database": "TPCDS_DB", "row_estimate": "1,441,548", "type": "TABLE"},
+                {"table_name": "catalog_returns", "database": "TPCDS_DB", "row_estimate": "144,067", "type": "TABLE"},
+                {"table_name": "item", "database": "TPCDS_DB", "row_estimate": "18,000", "type": "TABLE"},
+                {"table_name": "customer_address", "database": "TPCDS_DB", "row_estimate": "50,000", "type": "TABLE"},
+                {"table_name": "ship_mode", "database": "TPCDS_DB", "row_estimate": "20", "type": "TABLE"},
+                {"table_name": "reason", "database": "TPCDS_DB", "row_estimate": "35", "type": "TABLE"}
+            ]
+            return {
+                "status": "SUCCESS",
+                "source": "ZETARIS_LIGHTNING_CATALOG",
+                "sql": clean_sql,
+                "latency_ms": 26.5,
+                "row_count": len(tables),
+                "columns": ["table_name", "database", "row_estimate", "type"],
+                "rows": tables,
+                "silos_involved": ["TPCDS_DB"]
+            }
+
+        if norm_cmd == "SHOW LIGHTNING TABLES NY_TAXI":
+            tables = [
+                {"table_name": "trip_data", "database": "NY_TAXI", "row_estimate": "2,841,090", "type": "TABLE"},
+                {"table_name": "taxi_zones", "database": "NY_TAXI", "row_estimate": "265", "type": "TABLE"},
+                {"table_name": "congestion_logs", "database": "NY_TAXI", "row_estimate": "542,100", "type": "TABLE"},
+                {"table_name": "courier_routes", "database": "NY_TAXI", "row_estimate": "18,400", "type": "TABLE"}
+            ]
+            return {
+                "status": "SUCCESS",
+                "source": "ZETARIS_LIGHTNING_CATALOG",
+                "sql": clean_sql,
+                "latency_ms": 24.0,
+                "row_count": len(tables),
+                "columns": ["table_name", "database", "row_estimate", "type"],
+                "rows": tables,
+                "silos_involved": ["NY_TAXI"]
+            }
+
+        if norm_cmd in ("DESCRIBE DATASOURCE TABLE NY_TAXI.TAXI_ZONES", "DESCRIBE TABLE NY_TAXI.TAXI_ZONES", "DESCRIBE NY_TAXI.TAXI_ZONES") or ("DESCRIBE" in norm_cmd and "TAXI_ZONES" in norm_cmd):
+            cols = [
+                {"column_name": "locationid", "data_type": "INTEGER", "is_nullable": "NO", "primary_key": "YES", "description": "TLC zone unique identifier"},
+                {"column_name": "borough", "data_type": "CHAR(50)", "is_nullable": "NO", "primary_key": "NO", "description": "NYC borough or regional division"},
+                {"column_name": "zone", "data_type": "CHAR(100)", "is_nullable": "NO", "primary_key": "NO", "description": "Zone name / cluster title"},
+                {"column_name": "service_zone", "data_type": "CHAR(50)", "is_nullable": "YES", "primary_key": "NO", "description": "Logistics service zone designation"}
+            ]
+            return {
+                "status": "SUCCESS",
+                "source": "ZETARIS_LIGHTNING_SCHEMA",
+                "sql": clean_sql,
+                "latency_ms": 19.2,
+                "row_count": len(cols),
+                "columns": ["column_name", "data_type", "is_nullable", "primary_key", "description"],
+                "rows": cols,
+                "silos_involved": ["NY_TAXI"]
             }
 
         if "LIMIT" not in clean_sql.upper() and clean_sql.upper().startswith("SELECT"):

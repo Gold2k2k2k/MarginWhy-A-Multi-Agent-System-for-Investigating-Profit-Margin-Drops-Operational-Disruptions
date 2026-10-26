@@ -51,6 +51,37 @@ class HMemEngine:
             )
             return record
 
+    def add_record(self, record: Optional[HMemRecord] = None, **kwargs: Any) -> None:
+        """Convenience method that stores the record and logs an ADD_RECORD entry to trust_ledger."""
+        if record is None:
+            rec_id = kwargs.get("hypothesis_id") or kwargs.get("id") or "rec_1"
+            rel = kwargs.get("relationships")
+            record = HMemRecord(
+                id=rec_id,
+                tier=kwargs.get("tier", "working"),
+                content=kwargs.get("content", ""),
+                source=kwargs.get("source", "manual"),
+                confidence=float(kwargs.get("confidence", 1.0)),
+                provenance=kwargs.get("provenance") or {},
+                entities=kwargs.get("entities") or [],
+                relationships=rel if isinstance(rel, list) else ([rel] if rel else []),
+                replacement_lineage=kwargs.get("lineage") or kwargs.get("replacement_lineage"),
+                status=kwargs.get("status", "ACTIVE"),
+            )
+        with self._lock:
+            self.records[record.id] = record
+            self._audit(
+                action="ADD_RECORD",
+                record_id=record.id,
+                details={
+                    "tier": record.tier,
+                    "confidence": record.confidence,
+                    "status": record.status,
+                    "source": record.source
+                }
+            )
+
+
     def reject_and_branch(
         self,
         rejected_id: str,
