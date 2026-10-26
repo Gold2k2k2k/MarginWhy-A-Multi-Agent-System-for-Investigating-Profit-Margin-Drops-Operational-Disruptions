@@ -194,7 +194,7 @@ python scripts/verify_submission.py
 ├── run.py                          # Unified CLI entry point (--query, --input, --sample-mode)
 ├── metadata.json                   # Official Hackathon submission metadata & tech stack declaration
 ├── vercel.json                     # Vercel Serverless deployment configuration
-├── .python-version                 # Pinned Python version (3.10)
+├── .python-version                 # Pinned Python version (3.12)
 ├── favicon.svg                     # Custom cybernetic multi-agent financial diagnostic favicon
 ├── requirements.txt                # Production dependencies (FastAPI, Uvicorn, Pydantic, Rich, Pytest)
 ├── api/
