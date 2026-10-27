@@ -50,3 +50,8 @@ logs/*.log
 
 # Internal agent coordination scratchpad
 .agents/
+
+# Media build artifacts & raw recordings
+recordings/
+*.mp4
+*.webm
